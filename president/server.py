@@ -47,6 +47,10 @@ def handle_client(client, addr):
     print(f"Connexion de {addr}")
     clients.append(client)
 
+    # Envoyer l'ID du joueur au client
+    player_id = len(clients) - 1  # L'ID du joueur est basé sur l'ordre de connexion
+    client.sendall(json.dumps({"player_id": player_id}).encode())
+
     if len(clients) == MAX_PLAYERS:
         print("Tous les joueurs sont connectés. Distribution des cartes...")
         distribute_cards()
@@ -65,7 +69,7 @@ def handle_client(client, addr):
                 if clients[current_turn] == client:
                     if not played_cards or validate_move(card, played_cards[-1]):
                         played_cards.append(card)
-                        broadcast(json.dumps({"played_card": card, "player": addr[1]}))
+                        broadcast(json.dumps({"played_card": card, "player": addr[1]}))  # Diffuser la carte jouée
                         current_turn = (current_turn + 1) % len(clients)
                         notify_turn()
                     else:
