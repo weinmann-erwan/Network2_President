@@ -88,7 +88,10 @@ def receive_data():
                             # Supprimer les cartes jouées de la main si elles appartiennent au joueur
                             for card in last_played_cards:
                                 if card in hand:
-                                    hand.remove(card)  # Supprimer la carte de la main
+                                    hand.remove(card)
+                        if "reset" in msg:
+                            last_played_cards = []  # Réinitialiser les cartes jouées
+                            print("Nouvelle manche commencée.")
                     except json.JSONDecodeError:
                         # Si le message JSON n'est pas complet, attendre plus de données
                         break
@@ -137,6 +140,16 @@ def draw_last_played_cards():
         text = font.render("Dernières cartes jouées", True, (0, 0, 0))
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, center_y - 40))
 
+def draw_pass_button():
+    """ Dessine le bouton 'Pass' """
+    font = pygame.font.Font(None, 36)
+    button_text = font.render("Pass", True, (255, 255, 255))
+    button_rect = pygame.Rect(WIDTH - 150, 20, 100, 50)  # Position en haut à droite
+    pygame.draw.rect(screen, (200, 0, 0), button_rect)  # Dessiner le bouton en rouge
+    screen.blit(button_text, (button_rect.x + (button_rect.width - button_text.get_width()) // 2,
+                              button_rect.y + (button_rect.height - button_text.get_height()) // 2))
+    return button_rect
+
 def draw_cards():
     """ Affiche les cartes du joueur """
     screen.fill(WHITE)
@@ -157,11 +170,17 @@ def draw_cards():
                     pygame.draw.rect(screen, (0, 255, 0), (x, y, CARD_WIDTH, CARD_HEIGHT), 3)
             else:
                 print(f"Carte non trouvée dans card_images: {card}")
+    pass_button_rect = draw_pass_button()  # Dessiner le bouton "Pass"
     pygame.display.flip()
+    return pass_button_rect
 
 def send_cards(cards):
     """ Envoie les cartes jouées au serveur """
     client.sendall(json.dumps({"play_cards": cards}).encode())
+
+def send_pass():
+    """ Envoie un message 'pass' au serveur """
+    client.sendall(json.dumps({"pass": True}).encode())
 
 running = True
 selected_card_index = 0  # Index de la carte sélectionnée
@@ -172,7 +191,7 @@ while running:
         pygame.time.delay(10)
         continue
 
-    draw_cards()
+    pass_button_rect = draw_cards()
     
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -198,6 +217,8 @@ while running:
                     selected_cards = []  # Réinitialiser la sélection
         elif event.type == pygame.MOUSEBUTTONDOWN:
             x, y = event.pos
+            if pass_button_rect.collidepoint(x, y):
+                send_pass()  # Envoyer un message "pass" si le bouton est cliqué
             for i, card in enumerate(hand):
                 card_x = 50 + i * (CARD_WIDTH + 10)
                 if card_x <= x <= card_x + CARD_WIDTH and HEIGHT - 180 <= y <= HEIGHT - 180 + CARD_HEIGHT:

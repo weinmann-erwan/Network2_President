@@ -29,8 +29,8 @@ def validate_move(cards, last_cards):
     if len(cards) != len(last_cards):
         return False
     # La valeur des cartes doit être supérieure à la dernière carte jouée
-    values = "23456789TJQKA"
-    return values.index(cards[0][0]) >= values.index(last_cards[0][0])
+    values = "3456789TJQKA2"  # "2" est la carte la plus forte
+    return values.index(cards[0][0]) > values.index(last_cards[0][0]) or cards[0][0] == "2"
 
 def notify_turn():
     """ Notifie les joueurs du tour actuel """
@@ -65,6 +65,7 @@ def handle_client(client, addr):
         distribute_cards()
 
     global current_turn, played_cards
+    passes = [False] * len(clients)  # Suivi des passes des joueurs
 
     while True:
         try:
@@ -79,14 +80,31 @@ def handle_client(client, addr):
                     if not played_cards or validate_move(cards, played_cards[-1]):
                         played_cards.append(cards)
                         broadcast(json.dumps({"played_cards": cards, "player": addr[1]}))  # Diffuser les cartes jouées
-                        current_turn = (current_turn + 1) % len(clients)
-                        notify_turn()
+                        if cards[0][0] == "2":  # Si un "2" est joué
+                            played_cards = []  # Réinitialiser les cartes jouées
+                            broadcast(json.dumps({"reset": True}))  # Notifier les clients de la réinitialisation
+                            current_turn = clients.index(client)  # Le joueur qui a joué le "2" commence
+                            notify_turn()
+                        else:
+                            passes = [False] * len(clients)  # Réinitialiser les passes
+                            current_turn = (current_turn + 1) % len(clients)
+                            notify_turn()
                     else:
                         client.sendall(json.dumps({"error": "Invalid move"}).encode())
                 else:
                     client.sendall(json.dumps({"error": "Not your turn"}).encode())
+            elif "pass" in data:
+                if clients[current_turn] == client:
+                    passes[current_turn] = True
+                    current_turn = (current_turn + 1) % len(clients)
+                    if all(passes):  # Si tous les joueurs ont passé
+                        played_cards = []  # Réinitialiser les cartes jouées
+                        broadcast(json.dumps({"reset": True}))  # Notifier les clients de la réinitialisation
+                        passes = [False] * len(clients)  # Réinitialiser les passes
+                    notify_turn()
+                else:
+                    client.sendall(json.dumps({"error": "Not your turn"}).encode())
             print(f"Message reçu de {addr}: {msg}")
-            broadcast(msg)
         except:
             break
 
