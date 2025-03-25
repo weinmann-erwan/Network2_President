@@ -17,11 +17,20 @@ def broadcast(message):
     for client in clients:
         client.sendall(message.encode())
 
-def validate_move(card, last_card):
+def validate_move(cards, last_cards):
     """ Valide si le coup est valide """
-    # Exemple simple : la carte doit être plus forte que la dernière carte jouée
+    # Toutes les cartes doivent avoir la même valeur
+    if len(set(card[0] for card in cards)) != 1:
+        return False
+    # Si aucune carte n'a été jouée, le coup est valide
+    if not last_cards:
+        return True
+    # Le nombre de cartes jouées doit correspondre au dernier coup
+    if len(cards) != len(last_cards):
+        return False
+    # La valeur des cartes doit être supérieure à la dernière carte jouée
     values = "23456789TJQKA"
-    return values.index(card[0]) > values.index(last_card[0])
+    return values.index(cards[0][0]) >= values.index(last_cards[0][0])
 
 def notify_turn():
     """ Notifie les joueurs du tour actuel """
@@ -64,12 +73,12 @@ def handle_client(client, addr):
                 break
 
             data = json.loads(msg)
-            if "play_card" in data:
-                card = data["play_card"]
+            if "play_cards" in data:
+                cards = data["play_cards"]
                 if clients[current_turn] == client:
-                    if not played_cards or validate_move(card, played_cards[-1]):
-                        played_cards.append(card)
-                        broadcast(json.dumps({"played_card": card, "player": addr[1]}))  # Diffuser la carte jouée
+                    if not played_cards or validate_move(cards, played_cards[-1]):
+                        played_cards.append(cards)
+                        broadcast(json.dumps({"played_cards": cards, "player": addr[1]}))  # Diffuser les cartes jouées
                         current_turn = (current_turn + 1) % len(clients)
                         notify_turn()
                     else:
