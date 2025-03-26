@@ -4,13 +4,14 @@ import json
 import random
 
 # Configuration du serveur
-HOST = "0.0.0.0"  
+HOST = "192.168.1.138"  
 PORT = 5555  
 clients = []
 deck = [f"{v}{c}" for v in "23456789TJQKA" for c in "CKTP"]  # Cartes disponibles
 current_turn = 0  # Index of the current player's turn
 played_cards = []  # Cards played on the table
 MAX_PLAYERS = 2  # Nombre maximum de joueurs
+passes = []  # Déplacer l'initialisation des passes ici, au niveau global
 
 def broadcast(message):
     """ Envoie un message à tous les joueurs """
@@ -51,9 +52,11 @@ def check_winner():
 
 def distribute_cards():
     """ Distribue toutes les cartes entre les joueurs """
-    global hands  # Ajouter une variable globale pour stocker les mains des joueurs
+    global hands, passes  # Ajouter passes aux variables globales
     random.shuffle(deck)
     hands = [deck[i::len(clients)] for i in range(len(clients))]  # Répartir toutes les cartes entre les joueurs
+    passes = [False] * len(clients)  # Initialiser les passes pour tous les joueurs
+    
     for i, client in enumerate(clients):
         client.sendall(json.dumps({"hand": hands[i]}).encode())
     global current_turn
@@ -74,8 +77,7 @@ def handle_client(client, addr):
         print("Tous les joueurs sont connectés. Distribution des cartes...")
         distribute_cards()
 
-    global current_turn, played_cards, hands
-    passes = [False] * len(clients)  # Suivi des passes des joueurs
+    global current_turn, played_cards, hands, passes  # Ajouter passes aux variables globales
 
     while True:
         try:
@@ -110,12 +112,14 @@ def handle_client(client, addr):
             elif "pass" in data:
                 if clients[current_turn] == client:
                     passes[current_turn] = True
+                    print(f"Player {current_turn} passed. Passes status: {passes}")  # Debug info
                     current_turn = (current_turn + 1) % len(clients)
                     if all(passes):  # Si tous les joueurs ont passé
                         played_cards = []  # Réinitialiser les cartes jouées
                         broadcast(json.dumps({"reset": True}))  # Notifier les clients de la réinitialisation
                         passes = [False] * len(clients)  # Réinitialiser les passes
-                    notify_turn()
+                        print("All players passed. Game reset. Next player:", current_turn)  # Debug info
+                    notify_turn()  # Notifier les joueurs du nouveau tour
                 else:
                     client.sendall(json.dumps({"error": "Not your turn"}).encode())
             print(f"Message reçu de {addr}: {msg}")

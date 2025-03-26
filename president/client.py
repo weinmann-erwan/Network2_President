@@ -5,7 +5,7 @@ import json
 import os
 
 # Configuration du client
-HOST = "127.0.0.1"  
+HOST = "192.168.1.138"  
 PORT = 5555  
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((HOST, PORT))
@@ -91,6 +91,7 @@ def receive_data():
                                     hand.remove(card)
                         if "reset" in msg:
                             last_played_cards = []  # Réinitialiser les cartes jouées
+                            selected_cards.clear()  # Réinitialiser les cartes sélectionnées
                             print("Nouvelle manche commencée.")
                         if "winner" in msg:
                             winner_id = msg["winner"]
