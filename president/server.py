@@ -30,7 +30,7 @@ def validate_move(cards, last_cards):
         return False
     # La valeur des cartes doit être supérieure à la dernière carte jouée
     values = "3456789TJQKA2"  # "2" est la carte la plus forte
-    return values.index(cards[0][0]) > values.index(last_cards[0][0]) or cards[0][0] == "2"
+    return values.index(cards[0][0]) >= values.index(last_cards[0][0]) or cards[0][0] == "2"
 
 def notify_turn():
     """ Notifie les joueurs du tour actuel """
@@ -40,8 +40,18 @@ def notify_turn():
         else:
             client.sendall(json.dumps({"turn": False}).encode())
 
+def check_winner():
+    """ Vérifie si un joueur a gagné """
+    for i, client in enumerate(clients):
+        if not hands[i]:  # Si la main d'un joueur est vide
+            broadcast(json.dumps({"winner": i}))  # Notifier tous les joueurs du gagnant
+            print(f"Le joueur {i} a gagné !")  # Message pour le débogage
+            return True
+    return False
+
 def distribute_cards():
     """ Distribue toutes les cartes entre les joueurs """
+    global hands  # Ajouter une variable globale pour stocker les mains des joueurs
     random.shuffle(deck)
     hands = [deck[i::len(clients)] for i in range(len(clients))]  # Répartir toutes les cartes entre les joueurs
     for i, client in enumerate(clients):
@@ -64,7 +74,7 @@ def handle_client(client, addr):
         print("Tous les joueurs sont connectés. Distribution des cartes...")
         distribute_cards()
 
-    global current_turn, played_cards
+    global current_turn, played_cards, hands
     passes = [False] * len(clients)  # Suivi des passes des joueurs
 
     while True:
@@ -79,7 +89,11 @@ def handle_client(client, addr):
                 if clients[current_turn] == client:
                     if not played_cards or validate_move(cards, played_cards[-1]):
                         played_cards.append(cards)
+                        for card in cards:
+                            hands[current_turn].remove(card)  # Retirer les cartes jouées de la main
                         broadcast(json.dumps({"played_cards": cards, "player": addr[1]}))  # Diffuser les cartes jouées
+                        if check_winner():  # Vérifier si un joueur a gagné
+                            return  # Arrêter la gestion du client si le jeu est terminé
                         if cards[0][0] == "2":  # Si un "2" est joué
                             played_cards = []  # Réinitialiser les cartes jouées
                             broadcast(json.dumps({"reset": True}))  # Notifier les clients de la réinitialisation

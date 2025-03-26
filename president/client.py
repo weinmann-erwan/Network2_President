@@ -59,7 +59,7 @@ selected_cards = []  # Liste des cartes sélectionnées
 
 def receive_data():
     """ Réception des données du serveur """
-    global hand, is_my_turn, player_id, last_played_cards
+    global hand, is_my_turn, player_id, last_played_cards, running
     buffer = ""  # Tampon pour accumuler les données reçues
     while True:
         try:
@@ -92,12 +92,28 @@ def receive_data():
                         if "reset" in msg:
                             last_played_cards = []  # Réinitialiser les cartes jouées
                             print("Nouvelle manche commencée.")
+                        if "winner" in msg:
+                            winner_id = msg["winner"]
+                            print(f"Le joueur {winner_id} a gagné !")
+                            display_winner_message(winner_id)
                     except json.JSONDecodeError:
                         # Si le message JSON n'est pas complet, attendre plus de données
                         break
         except Exception as e:
             print(f"Erreur dans receive_data: {e}")
             break
+
+def display_winner_message(winner_id):
+    """ Affiche un message indiquant le gagnant """
+    screen.fill(WHITE)
+    font = pygame.font.Font(None, 72)
+    if winner_id == player_id:
+        text = font.render("Félicitations ! Vous avez gagné !", True, (0, 255, 0))
+    else:
+        text = font.render(f"Le joueur {winner_id} a gagné !", True, (255, 0, 0))
+    screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - text.get_height() // 2))
+    pygame.display.flip()
+    pygame.time.delay(5000)  # Afficher le message pendant 5 secondes
 
 # Lancer le thread de réception
 threading.Thread(target=receive_data, daemon=True).start()
