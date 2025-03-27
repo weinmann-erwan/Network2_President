@@ -62,6 +62,11 @@ debug_message = ""
 debug_message_time = 0
 DEBUG_MESSAGE_DURATION = 4000  # Durée d'affichage des messages (4 secondes)
 
+# Variables pour le message de victoire
+winner_id = None
+winner_message_time = 0
+WINNER_MESSAGE_DURATION = 5000  # 5 secondes
+
 def sort_cards(cards):
     """
     Trie les cartes par valeur (3 à 2, avec 2 comme la plus forte) puis par couleur (C, K, T, P)
@@ -82,7 +87,7 @@ def sort_cards(cards):
 
 def receive_data():
     """ Réception des données du serveur """
-    global hand, is_my_turn, player_id, last_played_cards, running, debug_message, debug_message_time
+    global hand, is_my_turn, player_id, last_played_cards, running, debug_message, debug_message_time, winner_id, winner_message_time
     buffer = ""  # Tampon pour accumuler les données reçues
     while True:
         try:
@@ -124,8 +129,8 @@ def receive_data():
                             print("Nouvelle manche commencée.")
                         if "winner" in msg:
                             winner_id = msg["winner"]
+                            winner_message_time = pygame.time.get_ticks()  # Démarrer le timer
                             print(f"Le joueur {winner_id} a gagné !")
-                            display_winner_message(winner_id)
                         if "error" in msg:
                             debug_message = msg["error"]
                             debug_message_time = pygame.time.get_ticks()
@@ -137,17 +142,36 @@ def receive_data():
             print(f"Erreur dans receive_data: {e}")
             break
 
-def display_winner_message(winner_id):
+def display_winner_message():
     """ Affiche un message indiquant le gagnant """
-    screen.fill(WHITE)
-    font = pygame.font.Font(None, 72)
-    if winner_id == player_id:
-        text = font.render("Félicitations ! Vous avez gagné !", True, (0, 255, 0))
-    else:
-        text = font.render(f"Le joueur {winner_id} a gagné !", True, (255, 0, 0))
-    screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - text.get_height() // 2))
-    pygame.display.flip()
-    pygame.time.delay(5000)  # Afficher le message pendant 5 secondes
+    if winner_id is not None and pygame.time.get_ticks() - winner_message_time < WINNER_MESSAGE_DURATION:
+        # Créer une surface semi-transparente pour le fond
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.set_alpha(180)  # Semi-transparent
+        overlay.fill((0, 0, 0))  # Fond noir
+        screen.blit(overlay, (0, 0))
+        
+        # Grand texte pour le message de victoire
+        font_large = pygame.font.Font(None, 96)
+        font_medium = pygame.font.Font(None, 48)
+        
+        if winner_id == player_id:
+            title_text = font_large.render("VICTOIRE !", True, (255, 215, 0))  # Or
+            message_text = font_medium.render("Vous avez gagné la partie !", True, (255, 255, 255))
+        else:
+            title_text = font_large.render("DÉFAITE", True, (255, 50, 50))  # Rouge
+            message_text = font_medium.render(f"Le joueur {winner_id} a gagné la partie", True, (255, 255, 255))
+        
+        # Centrer les textes
+        screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 2 - 100))
+        screen.blit(message_text, (WIDTH // 2 - message_text.get_width() // 2, HEIGHT // 2))
+        
+        # Ajouter une bordure décorative
+        border_width = 10
+        pygame.draw.rect(screen, (255, 215, 0), (WIDTH//4, HEIGHT//4, WIDTH//2, HEIGHT//2), border_width)
+        
+        return True
+    return False
 
 # Lancer le thread de réception
 threading.Thread(target=receive_data, daemon=True).start()
@@ -223,25 +247,32 @@ def draw_pass_button():
 def draw_cards():
     """ Affiche les cartes du joueur """
     screen.fill(GRAY)
-    draw_turn_message()  # Afficher le message de tour
-    draw_last_played_cards()  # Afficher les dernières cartes jouées
-    draw_debug_message()  # Afficher le message de debug/feedback
-    y = HEIGHT - CARD_HEIGHT - 20  # Ajuster la position verticale des cartes
-    if len(hand) > 0:  # Vérifie que la main n'est pas vide
-        spacing = min((WIDTH - 100) // len(hand), CARD_WIDTH + 10)  # Calculer l'espacement pour que toutes les cartes tiennent
-        for i, card in enumerate(hand):
-            x = 50 + i * spacing  # Espacement dynamique
-            if card in card_images:
-                screen.blit(card_images[card], (x, y))
-                # Dessiner un bord noir autour de chaque carte
-                pygame.draw.rect(screen, (0, 0, 0), (x, y, CARD_WIDTH, CARD_HEIGHT), 1)
-                if i == selected_card_index:  # Dessiner un rectangle bleu autour de la carte sélectionnée
-                    pygame.draw.rect(screen, (0, 0, 255), (x, y, CARD_WIDTH, CARD_HEIGHT), 3)
-                if card in selected_cards:  # Dessiner un rectangle autour des cartes sélectionnées
-                    pygame.draw.rect(screen, (0, 255, 0), (x, y, CARD_WIDTH, CARD_HEIGHT), 3)
-            else:
-                print(f"Carte non trouvée dans card_images: {card}")
-    pass_button_rect = draw_pass_button()  # Dessiner le bouton "Pass"
+    
+    # Vérifier si un message de victoire doit être affiché
+    if winner_id is not None and pygame.time.get_ticks() - winner_message_time < WINNER_MESSAGE_DURATION:
+        pass_button_rect = pygame.Rect(WIDTH - 150, 20, 100, 50)  # Juste pour renvoyer quelque chose
+        display_winner_message()
+    else:
+        draw_turn_message()  # Afficher le message de tour
+        draw_last_played_cards()  # Afficher les dernières cartes jouées
+        draw_debug_message()  # Afficher le message de debug/feedback
+        y = HEIGHT - CARD_HEIGHT - 20  # Ajuster la position verticale des cartes
+        if len(hand) > 0:  # Vérifie que la main n'est pas vide
+            spacing = min((WIDTH - 100) // len(hand), CARD_WIDTH + 10)  # Calculer l'espacement pour que toutes les cartes tiennent
+            for i, card in enumerate(hand):
+                x = 50 + i * spacing  # Espacement dynamique
+                if card in card_images:
+                    screen.blit(card_images[card], (x, y))
+                    # Dessiner un bord noir autour de chaque carte
+                    pygame.draw.rect(screen, (0, 0, 0), (x, y, CARD_WIDTH, CARD_HEIGHT), 1)
+                    if i == selected_card_index:  # Dessiner un rectangle bleu autour de la carte sélectionnée
+                        pygame.draw.rect(screen, (0, 0, 255), (x, y, CARD_WIDTH, CARD_HEIGHT), 3)
+                    if card in selected_cards:  # Dessiner un rectangle autour des cartes sélectionnées
+                        pygame.draw.rect(screen, (0, 255, 0), (x, y, CARD_WIDTH, CARD_HEIGHT), 3)
+                else:
+                    print(f"Carte non trouvée dans card_images: {card}")
+        pass_button_rect = draw_pass_button()  # Dessiner le bouton "Pass"
+    
     pygame.display.flip()
     return pass_button_rect
 
@@ -276,6 +307,10 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
+            # Ne pas traiter les touches si un message de victoire est affiché
+            if winner_id is not None and pygame.time.get_ticks() - winner_message_time < WINNER_MESSAGE_DURATION:
+                continue
+                
             if event.key == pygame.K_LEFT:
                 # Déplacer la sélection vers la gauche
                 selected_card_index = (selected_card_index - 1) % len(hand)
@@ -295,6 +330,10 @@ while running:
                     send_cards(selected_cards)
                     selected_cards = []  # Réinitialiser la sélection
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            # Ne pas traiter les clics si un message de victoire est affiché
+            if winner_id is not None and pygame.time.get_ticks() - winner_message_time < WINNER_MESSAGE_DURATION:
+                continue
+                
             x, y = event.pos
             if pass_button_rect.collidepoint(x, y):
                 send_pass()  # Envoyer un message "pass" si le bouton est cliqué
