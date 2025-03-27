@@ -131,6 +131,14 @@ def receive_data():
                             winner_id = msg["winner"]
                             winner_message_time = pygame.time.get_ticks()  # Démarrer le timer
                             print(f"Le joueur {winner_id} a gagné !")
+                        if "game_restart" in msg:
+                            # Réinitialiser l'état du jeu pour un nouveau départ
+                            last_played_cards = []
+                            selected_cards.clear()
+                            winner_id = None
+                            debug_message = "Nouvelle partie ! Le jeu recommence."
+                            debug_message_time = pygame.time.get_ticks()
+                            print("Le jeu redémarre avec une nouvelle distribution.")
                         if "error" in msg:
                             debug_message = msg["error"]
                             debug_message_time = pygame.time.get_ticks()
@@ -311,13 +319,13 @@ while running:
             if winner_id is not None and pygame.time.get_ticks() - winner_message_time < WINNER_MESSAGE_DURATION:
                 continue
                 
-            if event.key == pygame.K_LEFT:
+            if event.key == pygame.K_LEFT and len(hand) > 0:
                 # Déplacer la sélection vers la gauche
                 selected_card_index = (selected_card_index - 1) % len(hand)
-            elif event.key == pygame.K_RIGHT:
+            elif event.key == pygame.K_RIGHT and len(hand) > 0:
                 # Déplacer la sélection vers la droite
                 selected_card_index = (selected_card_index + 1) % len(hand)
-            elif event.key == pygame.K_SPACE:
+            elif event.key == pygame.K_SPACE and len(hand) > 0:
                 # Ajouter ou retirer une carte de la sélection
                 card = hand[selected_card_index]
                 if card in selected_cards:

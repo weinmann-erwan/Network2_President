@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 import random
+import time  # Add time module for delays
 
 # Configuration du serveur
 HOST = "127.0.0.1"  
@@ -54,8 +55,31 @@ def check_winner():
         if not hands[i]:  # Si la main d'un joueur est vide
             broadcast(json.dumps({"winner": i}))  # Notifier tous les joueurs du gagnant
             print(f"Le joueur {i} a gagné !")  # Message pour le débogage
+            
+            # Attendre quelques secondes avant de redémarrer le jeu
+            threading.Timer(5.0, restart_game).start()
             return True
     return False
+
+def restart_game():
+    """ Redémarre le jeu après qu'un joueur a gagné """
+    global played_cards, current_turn, passes, cards_played_by_value
+    
+    if len(clients) < 1:  # S'il ne reste pas de joueurs connectés
+        return
+    
+    print("Redémarrage du jeu avec redistribution des cartes...")
+    
+    # Réinitialiser l'état du jeu
+    played_cards = []
+    passes = [False] * len(clients)
+    cards_played_by_value = {}
+    
+    # Annoncer le redémarrage
+    broadcast(json.dumps({"game_restart": True}))
+    
+    # Redistribuer les cartes
+    distribute_cards()
 
 def distribute_cards():
     """ Distribue toutes les cartes entre les joueurs """
