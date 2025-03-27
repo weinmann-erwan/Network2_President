@@ -4,7 +4,7 @@ import json
 import random
 
 # Configuration du serveur
-HOST = "192.168.1.138"  
+HOST = "127.0.0.1"  
 PORT = 5555  
 clients = []
 deck = [f"{v}{c}" for v in "23456789TJQKA" for c in "CKTP"]  # Cartes disponibles
@@ -19,19 +19,25 @@ def broadcast(message):
         client.sendall(message.encode())
 
 def validate_move(cards, last_cards):
-    """ Valide si le coup est valide """
+    """ Valide si le coup est valide et renvoie un tuple (valide, message) """
     # Toutes les cartes doivent avoir la même valeur
     if len(set(card[0] for card in cards)) != 1:
-        return False
+        return False, "Vous devez jouer des cartes de même valeur !"
+        
     # Si aucune carte n'a été jouée, le coup est valide
     if not last_cards:
-        return True
+        return True, ""
+        
     # Le nombre de cartes jouées doit correspondre au dernier coup
     if len(cards) != len(last_cards):
-        return False
+        return False, f"Vous devez jouer {len(last_cards)} carte(s) !"
+        
     # La valeur des cartes doit être supérieure à la dernière carte jouée
     values = "3456789TJQKA2"  # "2" est la carte la plus forte
-    return values.index(cards[0][0]) >= values.index(last_cards[0][0]) or cards[0][0] == "2"
+    if values.index(cards[0][0]) < values.index(last_cards[0][0]) and cards[0][0] != "2":
+        return False, "Vous devez jouer une carte plus forte que la précédente !"
+        
+    return True, ""
 
 def notify_turn():
     """ Notifie les joueurs du tour actuel """
@@ -89,7 +95,8 @@ def handle_client(client, addr):
             if "play_cards" in data:
                 cards = data["play_cards"]
                 if clients[current_turn] == client:
-                    if not played_cards or validate_move(cards, played_cards[-1]):
+                    valid_move, error_msg = validate_move(cards, played_cards[-1] if played_cards else [])
+                    if valid_move:
                         played_cards.append(cards)
                         for card in cards:
                             hands[current_turn].remove(card)  # Retirer les cartes jouées de la main
@@ -106,12 +113,13 @@ def handle_client(client, addr):
                             current_turn = (current_turn + 1) % len(clients)
                             notify_turn()
                     else:
-                        client.sendall(json.dumps({"error": "Invalid move"}).encode())
+                        client.sendall(json.dumps({"error": error_msg}).encode())
                 else:
-                    client.sendall(json.dumps({"error": "Not your turn"}).encode())
+                    client.sendall(json.dumps({"error": "Ce n'est pas votre tour de jouer !"}).encode())
             elif "pass" in data:
                 if clients[current_turn] == client:
                     passes[current_turn] = True
+                    client.sendall(json.dumps({"error": "Vous avez passé votre tour."}).encode())  # Message de confirmation
                     print(f"Player {current_turn} passed. Passes status: {passes}")  # Debug info
                     current_turn = (current_turn + 1) % len(clients)
                     if all(passes):  # Si tous les joueurs ont passé
@@ -121,7 +129,7 @@ def handle_client(client, addr):
                         print("All players passed. Game reset. Next player:", current_turn)  # Debug info
                     notify_turn()  # Notifier les joueurs du nouveau tour
                 else:
-                    client.sendall(json.dumps({"error": "Not your turn"}).encode())
+                    client.sendall(json.dumps({"error": "Ce n'est pas votre tour de jouer !"}).encode())
             print(f"Message reçu de {addr}: {msg}")
         except:
             break

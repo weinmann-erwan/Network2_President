@@ -5,7 +5,7 @@ import json
 import os
 
 # Configuration du client
-HOST = "192.168.1.138"  
+HOST = "0.0.0.0"  
 PORT = 5555  
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((HOST, PORT))
@@ -18,8 +18,8 @@ pygame.display.set_caption("Président - Jeu Multijoueur")
 
 # Couleurs
 WHITE = (255, 255, 255)
+GRAY = (200, 200, 200)
 
-# Charger les images des cartes
 # Charger les images des cartes
 CARD_WIDTH, CARD_HEIGHT = 100, 150  # Taille des cartes
 card_images = {}
@@ -57,9 +57,32 @@ last_played_cards = []
 
 selected_cards = []  # Liste des cartes sélectionnées
 
+# Variable pour les messages de debug/feedback
+debug_message = ""
+debug_message_time = 0
+DEBUG_MESSAGE_DURATION = 4000  # Durée d'affichage des messages (4 secondes)
+
+def sort_cards(cards):
+    """
+    Trie les cartes par valeur (3 à 2, avec 2 comme la plus forte) puis par couleur (C, K, T, P)
+    """
+    # Ordre des valeurs (3 est la plus faible, 2 est la plus forte)
+    value_order = {v: i for i, v in enumerate("3456789TJQKA2")}
+    # Ordre des couleurs
+    suit_order = {"C": 0, "K": 1, "T": 2, "P": 3}
+    
+    # Fonction de comparaison pour le tri
+    def card_key(card):
+        # La carte est sous forme "VS" où V est la valeur et S est la couleur
+        value = card[0]
+        suit = card[1]
+        return value_order[value], suit_order[suit]
+    
+    return sorted(cards, key=card_key)
+
 def receive_data():
     """ Réception des données du serveur """
-    global hand, is_my_turn, player_id, last_played_cards, running
+    global hand, is_my_turn, player_id, last_played_cards, running, debug_message, debug_message_time
     buffer = ""  # Tampon pour accumuler les données reçues
     while True:
         try:
@@ -74,10 +97,13 @@ def receive_data():
                         
                         # Traiter le message JSON
                         if "hand" in msg:
-                            hand = msg["hand"]
-                            print("Cartes reçues:", hand)
+                            hand = sort_cards(msg["hand"])  # Trier les cartes reçues
+                            print("Cartes reçues et triées:", hand)
                         if "turn" in msg:
                             is_my_turn = msg["turn"]
+                            if is_my_turn:
+                                debug_message = "C'est à votre tour de jouer !"
+                                debug_message_time = pygame.time.get_ticks()
                             print(f"Tour mis à jour : {is_my_turn}")
                         if "player_id" in msg:
                             player_id = msg["player_id"]
@@ -89,14 +115,21 @@ def receive_data():
                             for card in last_played_cards:
                                 if card in hand:
                                     hand.remove(card)
+                            hand = sort_cards(hand)  # Re-trier les cartes restantes
                         if "reset" in msg:
                             last_played_cards = []  # Réinitialiser les cartes jouées
                             selected_cards.clear()  # Réinitialiser les cartes sélectionnées
+                            debug_message = "Nouvelle manche ! Toutes les cartes sont autorisées."
+                            debug_message_time = pygame.time.get_ticks()
                             print("Nouvelle manche commencée.")
                         if "winner" in msg:
                             winner_id = msg["winner"]
                             print(f"Le joueur {winner_id} a gagné !")
                             display_winner_message(winner_id)
+                        if "error" in msg:
+                            debug_message = msg["error"]
+                            debug_message_time = pygame.time.get_ticks()
+                            print(f"Erreur reçue: {debug_message}")
                     except json.JSONDecodeError:
                         # Si le message JSON n'est pas complet, attendre plus de données
                         break
@@ -119,15 +152,35 @@ def display_winner_message(winner_id):
 # Lancer le thread de réception
 threading.Thread(target=receive_data, daemon=True).start()
 
+def draw_debug_message():
+    """ Affiche un message de debug/feedback à l'écran """
+    current_time = pygame.time.get_ticks()
+    if debug_message and current_time - debug_message_time < DEBUG_MESSAGE_DURATION:
+        font = pygame.font.Font(None, 28)
+        text = font.render(debug_message, True, (0, 0, 0))
+        
+        # Créer un fond semi-transparent pour le message
+        message_bg = pygame.Surface((text.get_width() + 20, text.get_height() + 10))
+        message_bg.set_alpha(200)  # Semi-transparent
+        message_bg.fill((255, 255, 200))  # Couleur jaune pâle
+        
+        # Position en bas de l'écran
+        x = (WIDTH - message_bg.get_width()) // 2
+        y = HEIGHT - 220  # Au-dessus des cartes du joueur
+        
+        # Afficher le fond puis le texte
+        screen.blit(message_bg, (x, y))
+        screen.blit(text, (x + 10, y + 5))  # Un peu de marge pour le texte
+
 def draw_turn_message():
     """ Affiche un message indiquant le tour et l'ID du joueur """
     font = pygame.font.Font(None, 36)
     if player_id is None:
         text = font.render("En attente de l'ID du joueur...", True, (255, 255, 0))
     elif is_my_turn:
-        text = font.render(f"Joueur {player_id}: C'est à vous de jouer", True, (0, 255, 0))
+        text = font.render(f"Joueur {player_id}: C'est à vous de jouer", True, (0, 100, 0))
     else:
-        text = font.render(f"Joueur {player_id}: Au tour de l'adversaire", True, (255, 0, 0))
+        text = font.render(f"Joueur {player_id}: Au tour de l'adversaire", True, (100, 0, 0))
     screen.blit(text, (WIDTH // 2 - text.get_width() // 2, 20))
 
 def draw_last_played_cards():
@@ -169,9 +222,10 @@ def draw_pass_button():
 
 def draw_cards():
     """ Affiche les cartes du joueur """
-    screen.fill(WHITE)
+    screen.fill(GRAY)
     draw_turn_message()  # Afficher le message de tour
     draw_last_played_cards()  # Afficher les dernières cartes jouées
+    draw_debug_message()  # Afficher le message de debug/feedback
     y = HEIGHT - CARD_HEIGHT - 20  # Ajuster la position verticale des cartes
     if len(hand) > 0:  # Vérifie que la main n'est pas vide
         spacing = min((WIDTH - 100) // len(hand), CARD_WIDTH + 10)  # Calculer l'espacement pour que toutes les cartes tiennent
@@ -193,6 +247,14 @@ def draw_cards():
 
 def send_cards(cards):
     """ Envoie les cartes jouées au serveur """
+    global debug_message, debug_message_time
+    
+    # Vérifier que toutes les cartes ont la même valeur
+    if len(set(card[0] for card in cards)) != 1:
+        debug_message = "Vous devez jouer des cartes de même valeur !"
+        debug_message_time = pygame.time.get_ticks()
+        return
+    
     client.sendall(json.dumps({"play_cards": cards}).encode())
 
 def send_pass():
